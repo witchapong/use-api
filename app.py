@@ -27,18 +27,17 @@ def instantiate_reps_from_s3(bucket_name, fn):
     s3_resource = boto3.resource('s3')
     print('Downloading from S3')
     s3_resource.Object(bucket_name, fn).download_file(f'intents.json')
+    
     # load from local
-    return json.load(open('intents.json','rb'))
-
-    # intents = json.load(open('intents.json','rb'))['intents']
-    # itoid = []
-    # phrase_embs = []
-    # for intent in intents:
-    #     for phrase in intent['phrases']:
-    #         itoid.append(phrase['intent_id'])
-    #         phrase_embs.append(model(phrase['value']).numpy())
-    # phrase_arr = np.vstack(phrase_embs)
-    # return phrase_arr, itoid
+    intents = json.load(open('intents.json','rb'))['intents']
+    itoid = []
+    phrase_embs = []
+    for intent in intents:
+        for phrase in intent['phrases']:
+            itoid.append(phrase['intent_id'])
+            phrase_embs.append(model(phrase['value']).numpy())
+    phrase_arr = np.vstack(phrase_embs)
+    return phrase_arr, itoid
 
 def create_app():
     app = Flask(__name__)
@@ -68,25 +67,17 @@ class IntentClassifier(Resource):
         return int(pd.DataFrame({'intent_id':itoid, 'score':sim_score.squeeze()}).groupby('intent_id').sum().idxmax()['score'])
 
     def get(self):
-        return {'message': 'foo'}
-        # payload = self.__class__.parser.parse_args()
-        # intent_id = self.get_intent(payload['value'])
-        # return {'intent_id':intent_id}
+        payload = self.__class__.parser.parse_args()
+        intent_id = self.get_intent(payload['value'])
+        return {'intent_id':intent_id}
 
-# model = hub.load("https://tfhub.dev/google/universal-sentence-encoder-multilingual/3")
+model = hub.load("https://tfhub.dev/google/universal-sentence-encoder-multilingual/3")
 BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
-# intent_json = instantiate_reps_from_s3(bucket_name=BUCKET_NAME, fn='response.json')
-# phrase_arr, itoid = instantiate_reps_from_s3(bucket_name=BUCKET_NAME, fn='response.json')
+intent_json = instantiate_reps_from_s3(bucket_name=BUCKET_NAME, fn='response.json')
+phrase_arr, itoid = instantiate_reps_from_s3(bucket_name=BUCKET_NAME, fn='response.json')
 
 app = create_app()
-
-@app.route('/',methods=['GET'])
-def main():
-    content=request.json
-    print(content)
-    # return jsonify(received_json)
-    return content
-# create_api(app)
+create_api(app)
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
