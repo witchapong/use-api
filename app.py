@@ -9,19 +9,6 @@ import boto3
 import json
 import os
 
-def instantiate_reps_from_api():
-
-    resp = requests.get('https://simple-chatbot-api.herokuapp.com/intents')
-    intents = resp.json()['intents']
-    itoid = []
-    phrase_embs = []
-    for intent in intents:
-        for phrase in intent['phrases']:
-            itoid.append(phrase['intent_id'])
-            phrase_embs.append(model(phrase['value']).numpy())
-    phrase_arr = np.vstack(phrase_embs)
-    return phrase_arr, itoid
-
 def instantiate_reps_from_s3(bucket_name, fn):
     # load from s3
     s3_resource = boto3.resource('s3')
@@ -64,7 +51,7 @@ class IntentClassifier(Resource):
     def get_intent(sentence):
         sent_vec = model(sentence).numpy()
         sim_score = sent_vec @ phrase_arr.T
-        return int(pd.DataFrame({'intent_id':itoid, 'score':sim_score.squeeze()}).groupby('intent_id').sum().idxmax()['score'])
+        return int(pd.DataFrame({'intent_id':itoid, 'score':sim_score.squeeze()}).groupby('intent_id').max().idxmax()['score'])
 
     def get(self):
         payload = self.__class__.parser.parse_args()
@@ -73,8 +60,7 @@ class IntentClassifier(Resource):
 
 model = hub.load("https://tfhub.dev/google/universal-sentence-encoder-multilingual/3")
 BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
-intent_json = instantiate_reps_from_s3(bucket_name=BUCKET_NAME, fn='response.json')
-phrase_arr, itoid = instantiate_reps_from_s3(bucket_name=BUCKET_NAME, fn='response.json')
+phrase_arr, itoid = instantiate_reps_from_s3(bucket_name=BUCKET_NAME, fn='intents.json')
 
 app = create_app()
 create_api(app)
